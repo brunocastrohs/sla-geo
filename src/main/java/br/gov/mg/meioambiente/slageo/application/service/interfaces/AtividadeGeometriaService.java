@@ -1,7 +1,6 @@
 package br.gov.mg.meioambiente.slageo.application.service.interfaces;
 
 import br.gov.mg.meioambiente.slageo.application.dto.AtividadeGeometriaDto;
-import br.gov.mg.meioambiente.slageo.repository.interfaces.LimiteMunicipalRepository;
 
 import java.util.List;
 
@@ -33,22 +32,7 @@ public interface AtividadeGeometriaService {
             Long idAtividade
     );
 
-    boolean estaIntegralmenteEmMinasGerais(
-            AtividadeGeometriaDto dto
+    double[] buscarCentro(
+            Long idAtividade
     );
-
-    long contarMunicipiosIntersectados(
-            AtividadeGeometriaDto dto
-    );
-
-    boolean intersectaMaisDeUmMunicipio(
-            AtividadeGeometriaDto dto
-    );
-
-    List<LimiteMunicipalRepository.MunicipioIntersecao>
-    buscarMunicipiosIntersectados(
-            AtividadeGeometriaDto dto
-    );
-
-    double[] buscarCentro(Long idAtividade);
 }

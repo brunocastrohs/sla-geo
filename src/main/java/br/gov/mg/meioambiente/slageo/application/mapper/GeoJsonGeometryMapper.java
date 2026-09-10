@@ -1,12 +1,9 @@
 package br.gov.mg.meioambiente.slageo.application.mapper;
 
 import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.MultiPolygon;
-import org.locationtech.jts.geom.Polygon;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.geojson.GeoJsonReader;
 import org.locationtech.jts.io.geojson.GeoJsonWriter;
-
 import org.springframework.stereotype.Component;
 
 import tools.jackson.databind.JsonNode;
@@ -17,13 +14,10 @@ public class GeoJsonGeometryMapper {
 
     private static final int SRID = 4674;
 
-    private final JsonMapper jsonMapper;
+    private final JsonMapper jsonMapper =
+            JsonMapper.builder().build();
 
-    public GeoJsonGeometryMapper() {
-        this.jsonMapper = JsonMapper.builder().build();
-    }
-
-    public MultiPolygon toMultiPolygon(
+    public Geometry toGeometry(
             JsonNode geoJson) {
 
         if (geoJson == null) {
@@ -31,42 +25,17 @@ public class GeoJsonGeometryMapper {
         }
 
         try {
-            GeoJsonReader reader =
-                    new GeoJsonReader();
-
             Geometry geometry =
-                    reader.read(
-                            geoJson.toString()
-                    );
+                    new GeoJsonReader()
+                            .read(
+                                    geoJson.toString()
+                            );
 
-            geometry.setSRID(SRID);
-
-            if (geometry instanceof MultiPolygon multiPolygon) {
-
-                multiPolygon.setSRID(SRID);
-
-                return multiPolygon;
+            if (geometry != null) {
+                geometry.setSRID(SRID);
             }
 
-            if (geometry instanceof Polygon polygon) {
-
-                MultiPolygon multiPolygon =
-                        polygon
-                                .getFactory()
-                                .createMultiPolygon(
-                                        new Polygon[]{
-                                                polygon
-                                        }
-                                );
-
-                multiPolygon.setSRID(SRID);
-
-                return multiPolygon;
-            }
-
-            throw new IllegalArgumentException(
-                    "A geometria deve ser Polygon ou MultiPolygon."
-            );
+            return geometry;
 
         } catch (ParseException e) {
 
@@ -78,18 +47,16 @@ public class GeoJsonGeometryMapper {
     }
 
     public JsonNode toJsonNode(
-            MultiPolygon geometry) {
+            Geometry geometry) {
 
         if (geometry == null) {
             return null;
         }
 
         try {
-            GeoJsonWriter writer =
-                    new GeoJsonWriter();
-
             String geoJson =
-                    writer.write(geometry);
+                    new GeoJsonWriter()
+                            .write(geometry);
 
             return jsonMapper.readTree(
                     geoJson

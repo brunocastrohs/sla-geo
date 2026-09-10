@@ -14,4 +14,8 @@ public interface AtividadeGeometriaRepository
     List<AtividadeGeometria> findByIdSolic(
             Long idSolic
     );
+
+    boolean existsByIdSolic(
+            Long idSolic
+    );
 }

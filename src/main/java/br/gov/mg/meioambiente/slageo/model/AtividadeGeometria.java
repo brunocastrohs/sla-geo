@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import org.locationtech.jts.geom.MultiPolygon;
+import org.locationtech.jts.geom.Geometry;
 
 @Entity
 @Table(
@@ -29,21 +29,20 @@ public class AtividadeGeometria {
 
     @Column(
             name = "geom",
-            nullable = false,
-            columnDefinition = "geometry(MultiPolygon,4674)"
+            columnDefinition = "geometry(Geometry,4674)"
     )
-    private MultiPolygon geometria;
+    private Geometry geometria;
 
     public AtividadeGeometria() {
     }
 
     public AtividadeGeometria(
-            Long idSolic,
             Long idAtividade,
-            MultiPolygon geometria) {
+            Long idSolic,
+            Geometry geometria) {
 
-        this.idSolic = idSolic;
         this.idAtividade = idAtividade;
+        this.idSolic = idSolic;
         this.geometria = geometria;
     }
 
@@ -67,24 +66,12 @@ public class AtividadeGeometria {
         this.idSolic = idSolic;
     }
 
-    public MultiPolygon getGeometria() {
+    public Geometry getGeometria() {
         return geometria;
     }
 
     public void setGeometria(
-            MultiPolygon geometria) {
-
-        if (geometria == null || geometria.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "A geometria não pode ser vazia"
-            );
-        }
-
-        if (!geometria.isValid()) {
-            throw new IllegalArgumentException(
-                    "A geometria informada é inválida"
-            );
-        }
+            Geometry geometria) {
 
         this.geometria = geometria;
     }

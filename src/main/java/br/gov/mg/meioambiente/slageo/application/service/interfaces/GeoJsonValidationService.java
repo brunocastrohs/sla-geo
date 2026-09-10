@@ -4,5 +4,7 @@ import org.locationtech.jts.geom.Geometry;
 
 public interface GeoJsonValidationService {
 
-    Geometry validar(String geoJson);
+    Geometry validar(
+            String geoJson
+    );
 }

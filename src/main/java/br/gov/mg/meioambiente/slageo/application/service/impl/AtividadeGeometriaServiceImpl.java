@@ -3,11 +3,10 @@ package br.gov.mg.meioambiente.slageo.application.service.impl;
 import br.gov.mg.meioambiente.slageo.application.dto.AtividadeGeometriaDto;
 import br.gov.mg.meioambiente.slageo.application.mapper.AtividadeGeometriaMapper;
 import br.gov.mg.meioambiente.slageo.application.service.interfaces.AtividadeGeometriaService;
-import br.gov.mg.meioambiente.slageo.application.service.interfaces.GeoJsonValidationService;
 import br.gov.mg.meioambiente.slageo.model.AtividadeGeometria;
 import br.gov.mg.meioambiente.slageo.repository.interfaces.AtividadeGeometriaRepository;
-import br.gov.mg.meioambiente.slageo.repository.interfaces.LimiteEstadualRepository;
-import br.gov.mg.meioambiente.slageo.repository.interfaces.LimiteMunicipalRepository;
+
+import org.locationtech.jts.geom.Point;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,58 +17,15 @@ import java.util.List;
 public class AtividadeGeometriaServiceImpl
         implements AtividadeGeometriaService {
 
-    private final AtividadeGeometriaRepository atividadeGeometriaRepository;
-    private final LimiteEstadualRepository limiteEstadualRepository;
-    private final LimiteMunicipalRepository limiteMunicipalRepository;
+    private final AtividadeGeometriaRepository repository;
     private final AtividadeGeometriaMapper mapper;
-    private final GeoJsonValidationService geoJsonValidationService;
 
     public AtividadeGeometriaServiceImpl(
-            AtividadeGeometriaRepository atividadeGeometriaRepository,
-            LimiteEstadualRepository limiteEstadualRepository,
-            LimiteMunicipalRepository limiteMunicipalRepository,
-            AtividadeGeometriaMapper mapper,
-            GeoJsonValidationService geoJsonValidationService) {
+            AtividadeGeometriaRepository repository,
+            AtividadeGeometriaMapper mapper) {
 
-        this.atividadeGeometriaRepository =
-                atividadeGeometriaRepository;
-
-        this.limiteEstadualRepository =
-                limiteEstadualRepository;
-
-        this.limiteMunicipalRepository =
-                limiteMunicipalRepository;
-
+        this.repository = repository;
         this.mapper = mapper;
-
-        this.geoJsonValidationService =
-                geoJsonValidationService;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public double[] buscarCentro(
-            Long idAtividade) {
-
-        AtividadeGeometria atividade =
-                atividadeGeometriaRepository
-                        .findById(idAtividade)
-                        .orElseThrow(
-                                () -> new IllegalArgumentException(
-                                        "Geometria não encontrada para a atividade "
-                                                + idAtividade
-                                )
-                        );
-
-        var ponto =
-                atividade
-                        .getGeometria()
-                        .getInteriorPoint();
-
-        return new double[]{
-                ponto.getX(),
-                ponto.getY()
-        };
     }
 
     @Override
@@ -77,9 +33,7 @@ public class AtividadeGeometriaServiceImpl
     public AtividadeGeometriaDto salvar(
             AtividadeGeometriaDto dto) {
 
-        validarGeoJson(dto);
-
-        if (atividadeGeometriaRepository.existsById(
+        if (repository.existsById(
                 dto.getIdAtividade())) {
 
             throw new IllegalArgumentException(
@@ -92,10 +46,9 @@ public class AtividadeGeometriaServiceImpl
         AtividadeGeometria entity =
                 mapper.toEntity(dto);
 
-        AtividadeGeometria salva =
-                atividadeGeometriaRepository.save(entity);
-
-        return mapper.toDto(salva);
+        return mapper.toDto(
+                repository.save(entity)
+        );
     }
 
     @Override
@@ -103,13 +56,11 @@ public class AtividadeGeometriaServiceImpl
     public AtividadeGeometriaDto atualizar(
             AtividadeGeometriaDto dto) {
 
-        validarGeoJson(dto);
-
-        if (!atividadeGeometriaRepository.existsById(
+        if (!repository.existsById(
                 dto.getIdAtividade())) {
 
             throw new IllegalArgumentException(
-                    "Não existe geometria para a atividade "
+                    "Geometria não encontrada para a atividade "
                             + dto.getIdAtividade()
                             + "."
             );
@@ -118,10 +69,9 @@ public class AtividadeGeometriaServiceImpl
         AtividadeGeometria entity =
                 mapper.toEntity(dto);
 
-        AtividadeGeometria atualizada =
-                atividadeGeometriaRepository.save(entity);
-
-        return mapper.toDto(atualizada);
+        return mapper.toDto(
+                repository.save(entity)
+        );
     }
 
     @Override
@@ -129,15 +79,11 @@ public class AtividadeGeometriaServiceImpl
     public AtividadeGeometriaDto salvarOuAtualizar(
             AtividadeGeometriaDto dto) {
 
-        validarGeoJson(dto);
-
-        AtividadeGeometria entity =
-                mapper.toEntity(dto);
-
-        AtividadeGeometria salva =
-                atividadeGeometriaRepository.save(entity);
-
-        return mapper.toDto(salva);
+        return mapper.toDto(
+                repository.save(
+                        mapper.toEntity(dto)
+                )
+        );
     }
 
     @Override
@@ -145,7 +91,7 @@ public class AtividadeGeometriaServiceImpl
     public AtividadeGeometriaDto buscarPorIdAtividade(
             Long idAtividade) {
 
-        return atividadeGeometriaRepository
+        return repository
                 .findById(idAtividade)
                 .map(mapper::toDto)
                 .orElseThrow(
@@ -162,7 +108,7 @@ public class AtividadeGeometriaServiceImpl
     public List<AtividadeGeometriaDto> buscarPorIdSolic(
             Long idSolic) {
 
-        return atividadeGeometriaRepository
+        return repository
                 .findByIdSolic(idSolic)
                 .stream()
                 .map(mapper::toDto)
@@ -173,7 +119,7 @@ public class AtividadeGeometriaServiceImpl
     @Transactional(readOnly = true)
     public List<AtividadeGeometriaDto> buscarTodos() {
 
-        return atividadeGeometriaRepository
+        return repository
                 .findAll()
                 .stream()
                 .map(mapper::toDto)
@@ -185,8 +131,7 @@ public class AtividadeGeometriaServiceImpl
     public void remover(
             Long idAtividade) {
 
-        if (!atividadeGeometriaRepository.existsById(
-                idAtividade)) {
+        if (!repository.existsById(idAtividade)) {
 
             throw new IllegalArgumentException(
                     "Geometria não encontrada para a atividade "
@@ -195,92 +140,41 @@ public class AtividadeGeometriaServiceImpl
             );
         }
 
-        atividadeGeometriaRepository.deleteById(
-                idAtividade
-        );
+        repository.deleteById(idAtividade);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public boolean estaIntegralmenteEmMinasGerais(
-            AtividadeGeometriaDto dto) {
+    public double[] buscarCentro(
+            Long idAtividade) {
 
-        String geoJson = obterGeoJsonValidado(dto);
+        AtividadeGeometria atividade =
+                repository
+                        .findById(idAtividade)
+                        .orElseThrow(
+                                () -> new IllegalArgumentException(
+                                        "Geometria não encontrada para a atividade "
+                                                + idAtividade
+                                                + "."
+                                )
+                        );
 
-        return limiteEstadualRepository
-                .estaIntegralmenteEmMinasGerais(
-                        geoJson
-                );
-    }
+        if (atividade.getGeometria() == null
+                || atividade.getGeometria().isEmpty()) {
 
-    @Override
-    @Transactional(readOnly = true)
-    public long contarMunicipiosIntersectados(
-            AtividadeGeometriaDto dto) {
-
-        String geoJson = obterGeoJsonValidado(dto);
-
-        return limiteMunicipalRepository
-                .contarMunicipiosIntersectados(
-                        geoJson
-                );
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean intersectaMaisDeUmMunicipio(
-            AtividadeGeometriaDto dto) {
-
-        String geoJson = obterGeoJsonValidado(dto);
-
-        return limiteMunicipalRepository
-                .intersectaMaisDeUmMunicipio(
-                        geoJson
-                );
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<LimiteMunicipalRepository.MunicipioIntersecao>
-    buscarMunicipiosIntersectados(
-            AtividadeGeometriaDto dto) {
-
-        String geoJson = obterGeoJsonValidado(dto);
-
-        return limiteMunicipalRepository
-                .buscarMunicipiosIntersectados(
-                        geoJson
-                );
-    }
-
-    private void validarGeoJson(
-            AtividadeGeometriaDto dto) {
-
-        obterGeoJsonValidado(dto);
-    }
-
-    private String obterGeoJsonValidado(
-            AtividadeGeometriaDto dto) {
-
-        if (dto == null) {
             throw new IllegalArgumentException(
-                    "Os dados da atividade são obrigatórios."
+                    "A atividade não possui geometria."
             );
         }
 
-        if (dto.getGeoJson() == null) {
-            throw new IllegalArgumentException(
-                    "O GeoJSON é obrigatório."
-            );
-        }
+        Point ponto =
+                atividade
+                        .getGeometria()
+                        .getInteriorPoint();
 
-        String geoJson =
-                dto.getGeoJson().toString();
-
-        geoJsonValidationService.validar(
-                geoJson
-        );
-
-        return geoJson;
+        return new double[]{
+                ponto.getX(),
+                ponto.getY()
+        };
     }
 }

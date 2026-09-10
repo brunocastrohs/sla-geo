@@ -8,7 +8,8 @@ import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
 
 @Mapper(
-        componentModel = MappingConstants.ComponentModel.SPRING,
+        componentModel =
+                MappingConstants.ComponentModel.SPRING,
         uses = GeoJsonGeometryMapper.class
 )
 public interface AtividadeGeometriaMapper {
