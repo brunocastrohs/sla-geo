@@ -1,0 +1,14 @@
+# Configuração do siege usada no experimento (passada com -R)
+verbose = false
+quiet = true
+json_output = true
+show-logfile = false
+logging = false
+parser = false
+protocol = HTTP/1.1
+connection = close
+timeout = 60
+failures = 1000000
+limit = 255
+delay = 0
+chunked = true

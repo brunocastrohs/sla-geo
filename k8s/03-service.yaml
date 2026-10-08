@@ -1,0 +1,15 @@
+# NodePort: acessível do host em http://$(minikube ip):30090,
+# balanceando entre todas as réplicas (diferente do port-forward, que fixa um pod).
+apiVersion: v1
+kind: Service
+metadata:
+  name: sla-geo-core
+  namespace: sla-geo
+spec:
+  type: NodePort
+  selector:
+    app: sla-geo-core
+  ports:
+    - port: 9090
+      targetPort: 9090
+      nodePort: 30090

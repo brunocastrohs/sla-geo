@@ -47,8 +47,7 @@ public class DenominacaoGeometria {
     private Integer idSolic;
 
     @Convert(
-            converter =
-                    DenominacaoEnumConverter.class
+            converter = DenominacaoEnumConverter.class
     )
     @Column(
             name = "id_denom",
@@ -61,8 +60,7 @@ public class DenominacaoGeometria {
 
     @Column(
             name = "geom",
-            columnDefinition =
-                    "geometry(Geometry,4674)"
+            columnDefinition = "geometry(Geometry,4674)"
     )
     private Geometry geometria;
 
@@ -74,10 +72,15 @@ public class DenominacaoGeometria {
 
     @Column(
             name = "geom_point",
-            columnDefinition =
-                    "geometry(Point,4674)"
+            columnDefinition = "geometry(Point,4674)"
     )
     private Point geomPoint;
+
+    @Column(
+            name = "arquivo_id",
+            length = 255
+    )
+    private String arquivoId;
 
     public DenominacaoGeometria() {
     }
@@ -86,76 +89,63 @@ public class DenominacaoGeometria {
         return idDenominacao;
     }
 
-    public void setIdDenominacao(
-            Long idDenominacao) {
-
-        this.idDenominacao =
-                idDenominacao;
+    public void setIdDenominacao(Long idDenominacao) {
+        this.idDenominacao = idDenominacao;
     }
 
     public Integer getIdSolic() {
         return idSolic;
     }
 
-    public void setIdSolic(
-            Integer idSolic) {
-
-        this.idSolic =
-                idSolic;
+    public void setIdSolic(Integer idSolic) {
+        this.idSolic = idSolic;
     }
 
     public DenominacaoEnum getDenominacao() {
         return denominacao;
     }
 
-    public void setDenominacao(
-            DenominacaoEnum denominacao) {
-
-        this.denominacao =
-                denominacao;
+    public void setDenominacao(DenominacaoEnum denominacao) {
+        this.denominacao = denominacao;
     }
 
     public LocalDateTime getDataExcl() {
         return dataExcl;
     }
 
-    public void setDataExcl(
-            LocalDateTime dataExcl) {
-
-        this.dataExcl =
-                dataExcl;
+    public void setDataExcl(LocalDateTime dataExcl) {
+        this.dataExcl = dataExcl;
     }
 
     public Geometry getGeometria() {
         return geometria;
     }
 
-    public void setGeometria(
-            Geometry geometria) {
-
-        this.geometria =
-                geometria;
+    public void setGeometria(Geometry geometria) {
+        this.geometria = geometria;
     }
 
     public String getGeoHash() {
         return geoHash;
     }
 
-    public void setGeoHash(
-            String geoHash) {
-
-        this.geoHash =
-                geoHash;
+    public void setGeoHash(String geoHash) {
+        this.geoHash = geoHash;
     }
 
     public Point getGeomPoint() {
         return geomPoint;
     }
 
-    public void setGeomPoint(
-            Point geomPoint) {
+    public void setGeomPoint(Point geomPoint) {
+        this.geomPoint = geomPoint;
+    }
 
-        this.geomPoint =
-                geomPoint;
+    public String getArquivoId() {
+        return arquivoId;
+    }
+
+    public void setArquivoId(String arquivoId) {
+        this.arquivoId = arquivoId;
     }
 }

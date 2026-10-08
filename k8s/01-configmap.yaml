@@ -1,0 +1,11 @@
+# Configurações não sensíveis. Postgres e MinIO rodam na máquina host;
+# dentro do minikube o host é acessível pelo nome host.minikube.internal.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sla-geo-core-config
+  namespace: sla-geo
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://host.minikube.internal:5435/sla-geo-poc
+  MINIO_ENDPOINT: http://host.minikube.internal:9100
+  MINIO_BUCKET: sla-geo-denominacoes

@@ -1,11 +1,13 @@
 package br.gov.mg.meioambiente.slageo.application.service.impl;
 
+import br.gov.mg.meioambiente.slageo.application.dto.ArquivoDenominacaoDto;
 import br.gov.mg.meioambiente.slageo.application.dto.DenominacaoGeometriaDto;
 import br.gov.mg.meioambiente.slageo.application.mapper.DenominacaoGeometriaMapper;
 import br.gov.mg.meioambiente.slageo.application.mapper.GeoJsonGeometryMapper;
 import br.gov.mg.meioambiente.slageo.application.service.interfaces.AtividadeConsolidacaoService;
 import br.gov.mg.meioambiente.slageo.application.service.interfaces.DenominacaoGeometriaService;
 import br.gov.mg.meioambiente.slageo.application.service.interfaces.GeoJsonValidationService;
+import br.gov.mg.meioambiente.slageo.integration.minio.MinioStorageClient;
 import br.gov.mg.meioambiente.slageo.model.DenominacaoGeometria;
 import br.gov.mg.meioambiente.slageo.model.enums.DenominacaoEnum;
 import br.gov.mg.meioambiente.slageo.repository.interfaces.DenominacaoGeometriaRepository;
@@ -16,16 +18,24 @@ import org.locationtech.jts.geom.Point;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
 public class DenominacaoGeometriaServiceImpl
         implements DenominacaoGeometriaService {
 
-    private final DenominacaoGeometriaRepository
-            repository;
+    private static final DateTimeFormatter ARQUIVO_TIMESTAMP =
+            DateTimeFormatter.ofPattern(
+                    "yyyyMMdd'T'HHmmssSSS"
+            );
+
+    private final DenominacaoGeometriaRepository repository;
 
     private final LimiteEstadualRepository
             limiteEstadualRepository;
@@ -33,8 +43,7 @@ public class DenominacaoGeometriaServiceImpl
     private final LimiteMunicipalRepository
             limiteMunicipalRepository;
 
-    private final DenominacaoGeometriaMapper
-            mapper;
+    private final DenominacaoGeometriaMapper mapper;
 
     private final GeoJsonGeometryMapper
             geoJsonGeometryMapper;
@@ -45,6 +54,9 @@ public class DenominacaoGeometriaServiceImpl
     private final AtividadeConsolidacaoService
             atividadeConsolidacaoService;
 
+    private final MinioStorageClient
+            minioStorageClient;
+
     public DenominacaoGeometriaServiceImpl(
             DenominacaoGeometriaRepository repository,
             LimiteEstadualRepository limiteEstadualRepository,
@@ -52,63 +64,79 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaMapper mapper,
             GeoJsonGeometryMapper geoJsonGeometryMapper,
             GeoJsonValidationService geoJsonValidationService,
-            AtividadeConsolidacaoService atividadeConsolidacaoService) {
+            AtividadeConsolidacaoService atividadeConsolidacaoService,
+            MinioStorageClient minioStorageClient) {
 
-        this.repository =
-                repository;
-
+        this.repository = repository;
         this.limiteEstadualRepository =
                 limiteEstadualRepository;
-
         this.limiteMunicipalRepository =
                 limiteMunicipalRepository;
-
-        this.mapper =
-                mapper;
-
+        this.mapper = mapper;
         this.geoJsonGeometryMapper =
                 geoJsonGeometryMapper;
-
         this.geoJsonValidationService =
                 geoJsonValidationService;
-
         this.atividadeConsolidacaoService =
                 atividadeConsolidacaoService;
+        this.minioStorageClient =
+                minioStorageClient;
     }
 
     @Override
     @Transactional
     public DenominacaoGeometriaDto salvar(
-            DenominacaoGeometriaDto dto) {
+            DenominacaoGeometriaDto dto,
+            MultipartFile arquivo) {
 
         validarDto(dto);
+        validarArquivoObrigatorio(arquivo);
 
-        DenominacaoGeometria entity =
-                mapper.toEntity(dto);
-
-        entity.setIdDenominacao(null);
-        entity.setDataExcl(null);
-
-        DenominacaoGeometria salva =
-                repository.saveAndFlush(
-                        entity
+        String arquivoId =
+                gerarArquivoId(
+                        dto.getIdSolic(),
+                        dto.getIdDenom()
                 );
 
-        atividadeConsolidacaoService
-                .criarOuAtualizar(
-                        salva.getIdSolic()
-                );
-
-        return mapper.toDto(
-                salva
+        salvarArquivoMinio(
+                arquivoId,
+                arquivo
         );
+
+        try {
+            DenominacaoGeometria entity =
+                    mapper.toEntity(dto);
+
+            entity.setIdDenominacao(null);
+            entity.setDataExcl(null);
+            entity.setArquivoId(arquivoId);
+
+            DenominacaoGeometria salva =
+                    repository.saveAndFlush(entity);
+
+            atividadeConsolidacaoService
+                    .criarOuAtualizar(
+                            salva.getIdSolic()
+                    );
+
+            return mapper.toDto(salva);
+
+        } catch (RuntimeException e) {
+
+            removerArquivoSilenciosamente(
+                    arquivoId
+            );
+
+            throw e;
+        }
     }
 
     @Override
     @Transactional
     public DenominacaoGeometriaDto atualizar(
             Long idDenominacao,
-            DenominacaoGeometriaDto dto) {
+            DenominacaoGeometriaDto dto,
+            MultipartFile arquivo) {
 
         validarDto(dto);
 
@@ -120,56 +148,107 @@ public class DenominacaoGeometriaServiceImpl
         Integer idSolicAnterior =
                 existente.getIdSolic();
 
-        existente.setIdSolic(
-                dto.getIdSolic()
-        );
+        String arquivoAnterior =
+                existente.getArquivoId();
 
-        existente.setDenominacao(
-                DenominacaoEnum.fromId(
-                        dto.getIdDenom()
-                )
-        );
+        String novoArquivoId = null;
 
-        existente.setGeometria(
-                geoJsonGeometryMapper
-                        .toGeometry(
-                                dto.getGeoJson()
-                        )
-        );
+        if (arquivo != null
+                && !arquivo.isEmpty()) {
 
-        existente.setGeoHash(
-                dto.getGeoHash()
-        );
+            validarArquivoZip(arquivo);
 
-        DenominacaoGeometria atualizada =
-                repository.saveAndFlush(
-                        existente
-                );
-
-        if (idSolicAnterior.equals(
-                atualizada.getIdSolic())) {
-
-            atividadeConsolidacaoService
-                    .atualizarSeExistir(
-                            idSolicAnterior
+            novoArquivoId =
+                    gerarArquivoId(
+                            dto.getIdSolic(),
+                            dto.getIdDenom()
                     );
 
-        } else {
-
-            atividadeConsolidacaoService
-                    .atualizarSeExistir(
-                            idSolicAnterior
-                    );
-
-            atividadeConsolidacaoService
-                    .criarOuAtualizar(
-                            atualizada.getIdSolic()
-                    );
+            salvarArquivoMinio(
+                    novoArquivoId,
+                    arquivo
+            );
         }
 
-        return mapper.toDto(
-                atualizada
-        );
+        try {
+            existente.setIdSolic(
+                    dto.getIdSolic()
+            );
+
+            existente.setDenominacao(
+                    DenominacaoEnum.fromId(
+                            dto.getIdDenom()
+                    )
+            );
+
+            existente.setGeometria(
+                    geoJsonGeometryMapper
+                            .toGeometry(
+                                    dto.getGeoJson()
+                            )
+            );
+
+            existente.setGeoHash(
+                    dto.getGeoHash()
+            );
+
+            if (novoArquivoId != null) {
+                existente.setArquivoId(
+                        novoArquivoId
+                );
+            }
+
+            DenominacaoGeometria atualizada =
+                    repository.saveAndFlush(
+                            existente
+                    );
+
+            if (idSolicAnterior.equals(
+                    atualizada.getIdSolic())) {
+
+                atividadeConsolidacaoService
+                        .atualizarSeExistir(
+                                idSolicAnterior
+                        );
+
+            } else {
+
+                atividadeConsolidacaoService
+                        .atualizarSeExistir(
+                                idSolicAnterior
+                        );
+
+                atividadeConsolidacaoService
+                        .criarOuAtualizar(
+                                atualizada.getIdSolic()
+                        );
+            }
+
+            if (novoArquivoId != null
+                    && arquivoAnterior != null
+                    && !arquivoAnterior.isBlank()
+                    && !arquivoAnterior.equals(
+                            novoArquivoId)) {
+
+                minioStorageClient.remover(
+                        arquivoAnterior
+                );
+            }
+
+            return mapper.toDto(
+                    atualizada
+            );
+
+        } catch (RuntimeException e) {
+
+            if (novoArquivoId != null) {
+                removerArquivoSilenciosamente(
+                        novoArquivoId
+                );
+            }
+
+            throw e;
+        }
     }
 
     @Override
@@ -224,6 +303,9 @@ public class DenominacaoGeometriaServiceImpl
         Integer idSolic =
                 entity.getIdSolic();
 
+        String arquivoId =
+                entity.getArquivoId();
+
         entity.setDataExcl(
                 LocalDateTime.now()
         );
@@ -236,6 +318,65 @@ public class DenominacaoGeometriaServiceImpl
                 .atualizarSeExistir(
                         idSolic
                 );
+
+        if (arquivoId != null
+                && !arquivoId.isBlank()) {
+
+            minioStorageClient.remover(
+                    arquivoId
+            );
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ArquivoDenominacaoDto recuperarArquivo(
+            Long idDenominacao) {
+
+        DenominacaoGeometria entity =
+                buscarEntidadeAtiva(
+                        idDenominacao
+                );
+
+        String arquivoId =
+                entity.getArquivoId();
+
+        if (arquivoId == null
+                || arquivoId.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "A denominação não possui arquivo associado."
+            );
+        }
+
+        if (!minioStorageClient.existe(
+                arquivoId)) {
+
+            throw new IllegalArgumentException(
+                    "O arquivo associado à denominação não foi encontrado."
+            );
+        }
+
+        try (
+                InputStream inputStream =
+                        minioStorageClient
+                                .recuperar(
+                                        arquivoId
+                                )
+        ) {
+
+            return new ArquivoDenominacaoDto(
+                    arquivoId,
+                    inputStream.readAllBytes()
+            );
+
+        } catch (IOException e) {
+
+            throw new IllegalStateException(
+                    "Não foi possível ler o arquivo da denominação.",
+                    e
+            );
+        }
     }
 
     @Override
@@ -273,9 +414,7 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaDto dto) {
 
         String geoJson =
-                obterGeoJsonValidado(
-                        dto
-                );
+                obterGeoJsonValidado(dto);
 
         return limiteEstadualRepository
                 .estaIntegralmenteEmMinasGerais(
@@ -289,9 +428,7 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaDto dto) {
 
         String geoJson =
-                obterGeoJsonValidado(
-                        dto
-                );
+                obterGeoJsonValidado(dto);
 
         return limiteMunicipalRepository
                 .contarMunicipiosIntersectados(
@@ -305,9 +442,7 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaDto dto) {
 
         String geoJson =
-                obterGeoJsonValidado(
-                        dto
-                );
+                obterGeoJsonValidado(dto);
 
         return limiteMunicipalRepository
                 .intersectaMaisDeUmMunicipio(
@@ -322,9 +457,7 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaDto dto) {
 
         String geoJson =
-                obterGeoJsonValidado(
-                        dto
-                );
+                obterGeoJsonValidado(dto);
 
         return limiteMunicipalRepository
                 .buscarMunicipiosIntersectados(
@@ -336,21 +469,18 @@ public class DenominacaoGeometriaServiceImpl
             DenominacaoGeometriaDto dto) {
 
         if (dto == null) {
-
             throw new IllegalArgumentException(
                     "Os dados da denominação são obrigatórios."
             );
         }
 
         if (dto.getIdSolic() == null) {
-
             throw new IllegalArgumentException(
                     "O idSolic é obrigatório."
             );
         }
 
         if (dto.getIdDenom() == null) {
-
             throw new IllegalArgumentException(
                     "O idDenom é obrigatório."
             );
@@ -360,23 +490,110 @@ public class DenominacaoGeometriaServiceImpl
                 dto.getIdDenom()
         );
 
-        obterGeoJsonValidado(
-                dto
-        );
+        obterGeoJsonValidado(dto);
+    }
+
+    private void validarArquivoObrigatorio(
+            MultipartFile arquivo) {
+
+        if (arquivo == null
+                || arquivo.isEmpty()) {
+
+            throw new IllegalArgumentException(
+                    "O arquivo ZIP é obrigatório."
+            );
+        }
+
+        validarArquivoZip(arquivo);
+    }
+
+    private void validarArquivoZip(
+            MultipartFile arquivo) {
+
+        String nome =
+                arquivo.getOriginalFilename();
+
+        if (nome == null
+                || !nome.toLowerCase()
+                        .endsWith(".zip")) {
+
+            throw new IllegalArgumentException(
+                    "O arquivo deve possuir extensão .zip."
+            );
+        }
+    }
+
+    private String gerarArquivoId(
+            Integer idSolic,
+            Integer idDenom) {
+
+        String timestamp =
+                LocalDateTime.now()
+                        .format(
+                                ARQUIVO_TIMESTAMP
+                        );
+
+        return idSolic
+                + "_"
+                + timestamp
+                + "_"
+                + idDenom
+                + ".zip";
+    }
+
+    private void salvarArquivoMinio(
+            String arquivoId,
+            MultipartFile arquivo) {
+
+        try (
+                InputStream inputStream =
+                        arquivo.getInputStream()
+        ) {
+
+            minioStorageClient.salvar(
+                    arquivoId,
+                    inputStream,
+                    arquivo.getSize(),
+                    "application/zip"
+            );
+
+        } catch (IOException e) {
+
+            throw new IllegalStateException(
+                    "Não foi possível ler o arquivo ZIP.",
+                    e
+            );
+        }
+    }
+
+    private void removerArquivoSilenciosamente(
+            String arquivoId) {
+
+        try {
+            if (arquivoId != null
+                    && minioStorageClient
+                            .existe(arquivoId)) {
+
+                minioStorageClient.remover(
+                        arquivoId
+                );
+            }
+
+        } catch (RuntimeException ignored) {
+            // Compensação best-effort.
+        }
     }
 
     private String obterGeoJsonValidado(
             DenominacaoGeometriaDto dto) {
 
         if (dto == null) {
-
             throw new IllegalArgumentException(
                     "Os dados da denominação são obrigatórios."
             );
         }
 
         if (dto.getGeoJson() == null) {
-
             throw new IllegalArgumentException(
                     "O GeoJSON é obrigatório."
             );
@@ -412,7 +629,6 @@ public class DenominacaoGeometriaServiceImpl
                         );
 
         if (entity.getDataExcl() != null) {
-
             throw new IllegalArgumentException(
                     "Denominação não encontrada: "
                             + idDenominacao

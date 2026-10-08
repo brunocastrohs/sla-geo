@@ -99,7 +99,7 @@ public class CriteriosLocacionaisRepositoryImpl
             );
         }
 
-        return resultados.getFirst();
+        return resultados.get(0);
     }
 
     @Override

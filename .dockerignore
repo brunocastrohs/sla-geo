@@ -1,0 +1,22 @@
+# Build
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Outros
+*.log
+.env
+k8s/
+*.md

@@ -1,19 +1,24 @@
 package br.gov.mg.meioambiente.slageo.application.service.interfaces;
 
+import br.gov.mg.meioambiente.slageo.application.dto.ArquivoDenominacaoDto;
 import br.gov.mg.meioambiente.slageo.application.dto.DenominacaoGeometriaDto;
 import br.gov.mg.meioambiente.slageo.repository.interfaces.LimiteMunicipalRepository;
+
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 public interface DenominacaoGeometriaService {
 
     DenominacaoGeometriaDto salvar(
-            DenominacaoGeometriaDto dto
+            DenominacaoGeometriaDto dto,
+            MultipartFile arquivo
     );
 
     DenominacaoGeometriaDto atualizar(
             Long idDenominacao,
-            DenominacaoGeometriaDto dto
+            DenominacaoGeometriaDto dto,
+            MultipartFile arquivo
     );
 
     DenominacaoGeometriaDto buscarPorId(
@@ -27,6 +32,10 @@ public interface DenominacaoGeometriaService {
     List<DenominacaoGeometriaDto> buscarTodos();
 
     void remover(
+            Long idDenominacao
+    );
+
+    ArquivoDenominacaoDto recuperarArquivo(
             Long idDenominacao
     );
 
